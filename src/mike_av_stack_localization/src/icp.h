@@ -6,8 +6,8 @@
 #include <pcl/console/time.h>   // TicToc
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/filters/voxel_grid.h>
-#include <sensor_msgs/NavSatFix.h>
-#include <sensor_msgs/Imu.h>
+#include "sensor_msgs/msg/nav_sat_fix.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 
 class ICP : public Scan_Matching
 {
@@ -24,12 +24,11 @@ public:
     std::mutex it_mutex;
     Eigen::Matrix4d initTransform;
 	Eigen::Matrix4d transformation_matrix;
-    ros::NodeHandle nh;
-    ros::Subscriber gnss_sub;
-    ros::Subscriber imu_sub;
+    rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr gnss_sub;
+    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub;
 
-    ICP(PointCloudT::Ptr target, Pose startingPose, int iterations, ros::NodeHandle n);
-    void gnss_update(const sensor_msgs::NavSatFixConstPtr& gnss);
-    void imu_update(const sensor_msgs::ImuConstPtr& imu);
-	void get_transform(const sensor_msgs::PointCloud2ConstPtr& cloud_msg);
+    ICP(PointCloudT::Ptr target, Pose startingPose, int iterations);
+    void gnss_update(const sensor_msgs::msg::NavSatFix::SharedPtr gnss);
+    void imu_update(const sensor_msgs::msg::Imu::SharedPtr imu);
+	void get_transform(const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg);
 };

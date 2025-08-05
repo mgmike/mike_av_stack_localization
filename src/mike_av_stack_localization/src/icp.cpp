@@ -1,17 +1,24 @@
 #include "icp.h"
 
-ICP::ICP(PointCloudT::Ptr t, Pose sp, int iter, ros::NodeHandle n): Scan_Matching(t), pose(sp), iterations(iter) {
-	ROS_INFO("In ICP!");
-	nh = n;
-    initTransform = transform3D(pose.rotation.yaw, pose.rotation.pitch, pose.rotation.roll, pose.position.x, pose.position.y, pose.position.z);
+std::string gnss_topic = "/carla/ego_vehicle/gnss/gnss1/fix";
+std::string imu_topic = "/carla/ego_vehicle/imu/imu1";
 
-    gnss_sub = nh.subscribe("/carla/ego_vehicle/gnss/gnss1/fix", 10, &ICP::gnss_update, this);
-    imu_sub = nh.subscribe("/carla/ego_vehicle/imu/imu1", 10, &ICP::imu_update, this);
+ICP::ICP(PointCloudT::Ptr t, Pose sp, int iter): Scan_Matching(t), pose(sp), iterations(iter) {
+	RCLCPP_INFO(this->get_logger(), "In ICP!");
+	size_t msgQueueSize = 10;
+	rclcpp::QoS qos_profile(msgQueueSize);
+	qos_profile.reliability(RMW_QOS_POLICY_RELIABILITY_RELIABLE); // Ensure reliable delivery
+    qos_profile.durability(RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL);
+    initTransform = transform3D(pose.rotation.yaw, pose.rotation.pitch, pose.rotation.roll, pose.position.x, pose.position.y, pose.position.z);
+    gnss_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+		gnss_topic, qos_profile, std::bind(&ICP::gnss_update, this, std::placeholders::_1));
+    imu_sub = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+		imu_topic, qos_profile, std::bind(&ICP::imu_update, this, std::placeholders::_1));
 	
 }
 
-void ICP::gnss_update(const sensor_msgs::NavSatFixConstPtr& gnss){
-	ROS_INFO("Got gnss!");
+void ICP::gnss_update(const sensor_msgs::msg::NavSatFix::SharedPtr gnss){
+	RCLCPP_INFO(this->get_logger(), "Got gnss!");
 	if (!gnss_rdy) {
 		gnss_rdy = true;
 		ps_mutex.lock();
@@ -22,9 +29,9 @@ void ICP::gnss_update(const sensor_msgs::NavSatFixConstPtr& gnss){
 	}
 }
 
-void ICP::imu_update(const sensor_msgs::ImuConstPtr& imu){
+void ICP::imu_update(const sensor_msgs::msg::Imu::SharedPtr imu){
 	// imu->orientation is a geometry_msgs/Quaternion, and must be converted to euiler for pose 
-	ROS_INFO("Got imu!");
+	RCLCPP_INFO(this->get_logger(), "Got imu!");
 	if (!imu_rdy) {
 		imu_rdy = true;
 		Rotate r;
@@ -37,19 +44,19 @@ void ICP::imu_update(const sensor_msgs::ImuConstPtr& imu){
 	}
 }
 
-void ICP::get_transform(const sensor_msgs::PointCloud2ConstPtr& cloud_msg){
-	ROS_INFO("Got point cloud!");
+void ICP::get_transform(const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg){
+	RCLCPP_INFO(this->get_logger(), "Got point cloud!");
 
     Eigen::Matrix4d transformation_matrix = Eigen::Matrix4d::Identity();
 
 	// Create pcl point cloud
-	pcl::PCLPointCloud2* cloud = new pcl::PCLPointCloud2;
-	pcl::PCLPointCloud2ConstPtr cloudPtr(cloud);
+	pcl::PCLPointCloud2 cloud = pcl::PCLPointCloud2();
+	// pcl::PCLPointCloud2ConstPtr cloudPtr(cloud);
 
 	// Convert to pcl
-	pcl_conversions::toPCL(*cloud_msg, *cloud);
+	pcl_conversions::toPCL(*cloud_msg, cloud);
 	PointCloudT::Ptr source(new PointCloudT);
-	pcl::fromPCLPointCloud2(*cloud, *source);
+	pcl::fromPCLPointCloud2(cloud, *source);
 
 	// Make voxel grid
 	PointCloudT::Ptr filteredSource(new PointCloudT);
@@ -85,7 +92,7 @@ void ICP::get_transform(const sensor_msgs::PointCloud2ConstPtr& cloud_msg){
   	icp.align(*tempSource);
   
   	if(icp.hasConverged()){
-  		ROS_INFO("ICP has converged");
+  		RCLCPP_INFO(this->get_logger(), "ICP has converged");
 		tm_mutex.lock();
 		transformation_matrix = icp.getFinalTransformation().cast<double>();
 		it_mutex.lock();

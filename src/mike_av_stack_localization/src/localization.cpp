@@ -1,10 +1,9 @@
-#include "ros/ros.h"
-#include <ros/console.h>
+#include "rclcpp/rclcpp.hpp"
 #include <thread>
 #include <string>
 #include <unordered_map>
 
-#include <sensor_msgs/PointCloud2.h>
+#include "sensor_msgs/msg/point_cloud2.hpp"
 
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/io/pcd_io.h>
@@ -22,9 +21,13 @@
 #include "icp.h"
 #include "icps.h"
 
+rclcpp::Node::SharedPtr node = NULL;
+// rclcpp::Subscription<std_msgs::msg::String>::SharedPtr subscription_;
 
-void callback(const sensor_msgs::PointCloud2ConstPtr& cloud_msg){
-    ROS_INFO("In Callback");
+void callback(const sensor_msgs::msg::PointCloud2& cloud_msg){
+    if (node != NULL){
+        RCLCPP_INFO(node->get_logger(), "In Callback");
+    }
     // Create pcl point cloud
     pcl::PCLPointCloud2* cloud = new pcl::PCLPointCloud2;
     pcl::PCLPointCloud2ConstPtr cloudPtr(cloud);
@@ -34,9 +37,11 @@ void callback(const sensor_msgs::PointCloud2ConstPtr& cloud_msg){
 
 
 int main(int argc, char** argv){
-    ros::init(argc, argv, "localization");
-    ros::NodeHandle nh("~");
-    ROS_INFO("Hello world!");
+    // ros::init(argc, argv, "localization");
+    // ros::NodeHandle nh("~");
+    rclcpp::init(argc, argv);
+    node = rclcpp::Node::make_shared("localization");
+    RCLCPP_INFO(node->get_logger(), "Hello world!");
 
     Scan_Matching* scan_matching;
 
@@ -54,13 +59,13 @@ int main(int argc, char** argv){
     std::string param;
     int param_int;
     // If the parameter 'map_name' exists and it is type string, then return true
-    if (nh.getParam("iters", param_int)){
+    if (node->get_parameter("iters", param_int)){
         iters = param_int;
     }
-    if (nh.getParam("map_name", param)){
-        map_name = param;
+    if (node->get_parameter("map_name", param)){
+        map_name = param; 
     }    
-    if (nh.getParam("topic", param)){
+    if (node->get_parameter("topic", param)){
         topic = param;
     }
 
@@ -72,7 +77,7 @@ int main(int argc, char** argv){
     // Load map
 	PointCloudT::Ptr mapCloud(new PointCloudT);
   	pcl::io::loadPCDFile(map_directory + map_name, *mapCloud);
-  	ROS_INFO_STREAM("Loaded " << mapCloud->points.size() << " data points from " << map_name);
+  	RCLCPP_INFO_STREAM(node->get_logger(), "Loaded " << mapCloud->points.size() << " data points from " << map_name);
 	// Flip the points. For some reason, they are flipped
 	PointCloudT::Ptr flipped(new PointCloudT);
 	for (auto point : mapCloud->points){
@@ -85,28 +90,28 @@ int main(int argc, char** argv){
 	Pose pose(Point(65.516594,7.808423,0.275307), Rotate(0.855823,0.0,0.0));
 
     // Assign the type of scan matching algorithm to scan_matching.
-    if (nh.getParam("scan_matching_algorithm", param)){
+    if (node->get_parameter("scan_matching_algorithm", param)){
         if (param == "ndt"){
 		    scan_matching = new NDT(mapCloud, pose, iters);
         } else if (param == "icp"){
-		    scan_matching = new ICP(mapCloud, pose, iters, nh);
+		    scan_matching = new ICP(mapCloud, pose, iters);
         } else if (param == "icps"){
 		    scan_matching = new ICPS(mapCloud, pose, iters, dist);
         } else {return 0;}
         //Move inside later
-        ROS_INFO("Setting up subscriber");
+        RCLCPP_INFO(node->get_logger(), "Setting up subscriber");
     }
-    // ros::Subscriber sub = nh.subscribe(topic, 10, callback);
-    ros::Subscriber sub = nh.subscribe(topic, 10, &Scan_Matching::get_transform, scan_matching);
 
     bool viz;
-    if (nh.getParam("viz", viz)){
+    if (node->get_parameter("viz", viz)){
         if (viz){
             scan_matching->enable_viz();
         }
     }
 
-    ros::spin();
+
+    rclcpp::spin(node);
+    rclcpp::shutdown();
 
     return 0;
 }

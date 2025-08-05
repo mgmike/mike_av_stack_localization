@@ -18,5 +18,5 @@ public:
   	pcl::KdTreeFLANN<PointT> kdtree;
 
     ICPS(PointCloudT::Ptr target, Pose startingPose, int iterations, int dist);
-	void get_transform(const sensor_msgs::PointCloud2ConstPtr& cloud_msg);
+	void get_transform(const sensor_msgs::msg::PointCloud2& cloud_msg);
 };

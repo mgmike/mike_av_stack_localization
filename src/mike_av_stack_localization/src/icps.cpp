@@ -53,7 +53,7 @@ vector<Pair> PairPoints(vector<int> associations, PointCloudT::Ptr target, Point
 	return pairs;
 }
 
-void ICPS::get_transform(const sensor_msgs::PointCloud2ConstPtr& cloud_msg){
+void ICPS::get_transform(const sensor_msgs::msg::PointCloud2& cloud_msg){
 
 
   // Create pcl point cloud
@@ -62,7 +62,7 @@ void ICPS::get_transform(const sensor_msgs::PointCloud2ConstPtr& cloud_msg){
   pcl::PCLPointCloud2 cloudfiltered;
 
   // Convert to pcl
-  pcl_conversions::toPCL(*cloud_msg, *cloud);
+  pcl_conversions::toPCL(cloud_msg, *cloud);
   PointCloudT::Ptr source(new PointCloudT);
   pcl::fromPCLPointCloud2(*cloud, *source);
 
